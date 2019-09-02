@@ -48,12 +48,13 @@ def write_voc_pascal(img, box_params, path='.', img_fmt = '.jpg'):
 class DrawBoundingBox():
     def __init__(self, get_box_params, get_image, post_calc=None, window_title='Bounding Box', quit_key='q',
         font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=0.5, font_color=(0,0,0), line_type=2,
-        box_thickness=2, box_color=(0,255,0), img_dir='.'):
+        box_thickness=2, box_color=(0,0,255), pred_box_color=(0,255, 0), img_dir='.'):
         '''
-        post_calc - function - first arguement will be a list of tuples 
-        representing the actual list of labels and boxes for the image
-        second argument will also be a list of tuples representing the 
-        predicted list of labels and boxes for the image
+        post_calc - function - first argument will be an image (numpy array)
+        second arguement will be a list of tuples representing the actual list 
+        of labels and boxes for the image third argument will also be a list 
+        of tuples representing the predicted list of labels and boxes for the image
+        post_calc(img, y_box_params, box_params)
 
         get_box_params - function - takes in an image (numpy array) should 
         return a list of tuples where the first element of the tuple is the 
@@ -67,6 +68,8 @@ class DrawBoundingBox():
         '''
         self.get_box_params, self.get_image = get_box_params, get_image
         self.WINDOW_TITLE, self.quit_key, self.img_dir = window_title, quit_key, img_dir
+        self.box_color, self.pred_box_color = box_color, pred_box_color
+        self.post_calc = post_calc
         self.font_args = {'font':font, 'font_scale':font_scale, 
                 'font_color':font_color, 'line_type':line_type,
                 'box_thickness':box_thickness, 'box_color':box_color}
@@ -75,13 +78,18 @@ class DrawBoundingBox():
         cv_loop(self._draw_box, quit_key=self.quit_key)
     
     def _draw_box(self):
-        img = self.get_image()
+        img, y_box_params = self.get_image()
         if img is not None: 
             box_params = self.get_box_params(img)
             print(box_params)
             write_voc_pascal(img, box_params, path=self.img_dir)
+            self.font_args['box_color'] = self.box_color
             list(map(lambda arg: draw_label_and_box(img, arg[0], 
                         arg[1], self.font_args), box_params))
+            self.font_args['box_color'] = self.pred_box_color
+            list(map(lambda arg: draw_label_and_box(img, arg[0], 
+                        arg[1], self.font_args), y_box_params))
+            self.post_calc(img, y_box_params, box_params)
             cv2.imshow(self.WINDOW_TITLE, img)
 
 def image_from_cv(read):
@@ -92,7 +100,7 @@ def image_from_cv(read):
 class DrawBoundingBoxOnNext(DrawBoundingBox):
     def __init__(self, get_box_params, get_image, post_calc=None, window_title='Bounding Box', quit_key='q',
         font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=0.5, font_color=(0,0,0), line_type=2,
-        box_thickness=2, box_color=(0,255,0), img_dir='.', next_key='n'):
+        box_thickness=2, box_color=(0,0,255), pred_box_color=(0,255, 0), img_dir='.', next_key='n'):
         '''
         get_box_params - function - takes in an image (numpy array) should 
         return a list of tuples where the first element of the tuple is the 
@@ -110,7 +118,7 @@ class DrawBoundingBoxOnNext(DrawBoundingBox):
         super().__init__(get_box_params, get_image, window_title=window_title, 
             quit_key=quit_key, font=font, font_scale=font_scale, font_color=font_color, 
             line_type=line_type, box_thickness=box_thickness, box_color=box_color, 
-            img_dir=img_dir, post_calc=post_calc)
+            pred_box_color=pred_box_color, img_dir=img_dir, post_calc=post_calc)
         self.next_key = next_key
         
     def run(self):
@@ -118,19 +126,24 @@ class DrawBoundingBoxOnNext(DrawBoundingBox):
 
 
 class OpenCVBoundingBox(DrawBoundingBox):
-    def __init__(self, get_box_params, cam_num=0, window_title='Bounding Box', quit_key='q',
+    def __init__(self, get_box_params, cam_num=0, window_title='Bounding Box', post_calc=None, quit_key='q',
         font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=0.5, font_color=(0,0,0), line_type=2,
-        box_thickness=2, box_color=(0,255,0), img_dir='.', post_calc=None):
+        box_thickness=2, box_color=(0,0,255), pred_box_color=(0,255, 0), img_dir='.'):
         self.vcap = cv2.VideoCapture(cam_num)
         def get_image():
             return image_from_cv(self.vcap.read)
         super().__init__(get_box_params, get_image, window_title=window_title, post_calc=post_calc,
             quit_key=quit_key, font=font, font_scale=font_scale, font_color=font_color, 
             line_type=line_type, box_thickness=box_thickness, box_color=box_color, 
-            img_dir=img_dir)
+            pred_box_color=pred_box_color, img_dir=img_dir)
 
 class DrawBoundingBoxOnFolder(DrawBoundingBoxOnNext):
-    def __init__(self, get_box_params, get_image, window_title='Bounding Box', quit_key='q',
+    def __init__(self, folder_path, get_box_params, window_title='Bounding Box', post_calc=None, quit_key='q',
         font=cv2.FONT_HERSHEY_SIMPLEX, font_scale=0.5, font_color=(0,0,0), line_type=2,
-        box_thickness=2, box_color=(0,255,0), img_dir='.', next_key='n'):
-        pass
+        box_thickness=2, box_color=(0,0,255), pred_box_color=(0,255, 0), img_dir='.', next_key='n'):
+        self.folder_path = folder_path
+        get_image = None # TODO - replace with proper implementation
+        super().__init__(get_box_params, get_image, window_title=window_title, post_calc=post_calc,
+            quit_key=quit_key, font=font, font_scale=font_scale, font_color=font_color, 
+            line_type=line_type, box_thickness=box_thickness, box_color=box_color, 
+            pred_box_color=pred_box_color, img_dir=img_dir)
